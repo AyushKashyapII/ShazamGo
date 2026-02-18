@@ -1,0 +1,5 @@
+/samples
+go.mod
+go.sum
+shazam.exe
+*.exe
