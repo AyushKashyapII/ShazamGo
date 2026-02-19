@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shazam-Go</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      margin: 0;
+      padding: 0;
+      background: #0f172a;
+      color: #e5e7eb;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 720px;
+      width: 100%;
+      padding: 24px 16px 48px;
+    }
+    h1 {
+      font-size: 24px;
+      margin-bottom: 8px;
+    }
+    p {
+      margin: 0 0 16px;
+      color: #9ca3af;
+    }
+    .card {
+      background: #020617;
+      border-radius: 12px;
+      padding: 16px 16px 20px;
+      border: 1px solid #1f2937;
+      margin-bottom: 16px;
+    }
+    .card h2 {
+      font-size: 18px;
+      margin: 0 0 8px;
+    }
+    .card small {
+      color: #6b7280;
+    }
+    .section {
+      margin-top: 8px;
+    }
+    input[type="file"] {
+      display: block;
+      margin: 12px 0;
+      color: #e5e7eb;
+    }
+    button {
+      cursor: pointer;
+      border: none;
+      border-radius: 999px;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: #2563eb;
+      color: white;
+      transition: background 0.15s ease, transform 0.05s ease;
+    }
+    button.secondary {
+      background: #111827;
+      border: 1px solid #374151;
+      color: #e5e7eb;
+    }
+    button:disabled {
+      opacity: 0.5;
+      cursor: default;
+    }
+    button:not(:disabled):hover {
+      background: #1d4ed8;
+    }
+    button.secondary:not(:disabled):hover {
+      background: #1f2937;
+    }
+    button:not(:disabled):active {
+      transform: translateY(1px);
+    }
+    .row {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-top: 8px;
+    }
+    .status {
+      margin-top: 8px;
+      font-size: 13px;
+      color: #9ca3af;
+      min-height: 18px;
+      white-space: pre-line;
+    }
+    .status strong {
+      color: #e5e7eb;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      background: rgba(37, 99, 235, 0.15);
+      border: 1px solid rgba(59, 130, 246, 0.5);
+      color: #bfdbfe;
+    }
+    .note {
+      font-size: 12px;
+      color: #6b7280;
+      margin-top: 6px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Shazam-Go</h1>
+    <p>Minimal audio fingerprinting demo. Upload a WAV file or record from your mic to identify a song.</p>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <h2>Add song to database</h2>
+          <small>Store a WAV file as a known song.</small>
+        </div>
+        <span class="badge">Step 1</span>
+      </div>
+      <div class="section">
+        <input id="add-file" type="file" accept="audio/wav" />
+        <div class="row">
+          <button id="add-btn">Add song</button>
+        </div>
+        <div class="note">Only WAV files are supported right now.</div>
+        <div id="add-status" class="status"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div>
+          <h2>Identify song</h2>
+          <small>Upload a WAV file or record from your mic.</small>
+        </div>
+        <span class="badge">Step 2</span>
+      </div>
+      <div class="section">
+        <input id="match-file" type="file" accept="audio/wav" />
+        <div class="row">
+          <button id="match-btn">Match file</button>
+        </div>
+        <div class="note">For best results, use the same clip you added to the database.</div>
+      </div>
+
+      <div class="section" style="margin-top: 16px;">
+        <small>Or record from your microphone:</small>
+        <div class="row">
+          <button id="record-btn" class="secondary">🎙 Start recording</button>
+          <span id="record-timer" style="font-size:13px;color:#9ca3af;"></span>
+        </div>
+        <div class="note">Recording is limited to a few seconds and may be encoded as WebM/Opus depending on your browser.</div>
+      </div>
+
+      <div id="match-status" class="status"></div>
+    </div>
+  </div>
+
+  <script>
+    const addFileInput = document.getElementById('add-file');
+    const addBtn = document.getElementById('add-btn');
+    const addStatus = document.getElementById('add-status');
+
+    const matchFileInput = document.getElementById('match-file');
+    const matchBtn = document.getElementById('match-btn');
+    const matchStatus = document.getElementById('match-status');
+
+    const recordBtn = document.getElementById('record-btn');
+    const recordTimer = document.getElementById('record-timer');
+
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let recordStartTime = null;
+    let recordInterval = null;
+
+    function setStatus(el, msg) {
+      el.textContent = msg;
+    }
+
+    async function addSong() {
+      const file = addFileInput.files[0];
+      if (!file) {
+        setStatus(addStatus, 'Please select a WAV file first.');
+        return;
+      }
+
+      addBtn.disabled = true;
+      setStatus(addStatus, 'Uploading and processing...');
+
+      try {
+        const form = new FormData();
+        form.append('file', file);
+
+        const res = await fetch('/api/add', {
+          method: 'POST',
+          body: form
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          setStatus(addStatus, `Error: ${data.message || 'unknown error'}`);
+          return;
+        }
+
+        setStatus(addStatus,
+          `Added song:\n` +
+          `  ID: ${data.songId}\n` +
+          `  Name: ${data.songName}`
+        );
+      } catch (e) {
+        console.error(e);
+        setStatus(addStatus, 'Error adding song. Check console for details.');
+      } finally {
+        addBtn.disabled = false;
+      }
+    }
+
+    async function matchFile(file) {
+      if (!file) {
+        setStatus(matchStatus, 'Please select or record audio first.');
+        return;
+      }
+
+      matchBtn.disabled = true;
+      recordBtn.disabled = true;
+      setStatus(matchStatus, 'Uploading and matching...');
+
+      try {
+        const form = new FormData();
+        form.append('file', file, file.name || 'recorded.wav');
+
+        const res = await fetch('/api/match', {
+          method: 'POST',
+          body: form
+        });
+
+        const data = await res.json();
+        if (!data.success) {
+          setStatus(matchStatus,
+            `No match.\n` +
+            (data.message ? `  Info: ${data.message}\n` : '') +
+            (data.totalHashes ? `  Hashes: ${data.matchCount}/${data.totalHashes}` : '')
+          );
+          return;
+        }
+
+        setStatus(matchStatus,
+          `Match found:\n` +
+          `  Song: ${data.songName} (ID: ${data.songId})\n` +
+          `  Confidence: ${(data.confidence * 100).toFixed(2)}%\n` +
+          `  Hashes: ${data.matchCount}/${data.totalHashes}`
+        );
+      } catch (e) {
+        console.error(e);
+        setStatus(matchStatus, 'Error matching song. Check console for details.');
+      } finally {
+        matchBtn.disabled = false;
+        recordBtn.disabled = false;
+      }
+    }
+
+    async function startRecording() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        setStatus(matchStatus, 'Microphone not supported in this browser.');
+        return;
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        recordedChunks = [];
+
+        const options = { mimeType: 'audio/webm' };
+        mediaRecorder = new MediaRecorder(stream, options);
+
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) {
+            recordedChunks.push(e.data);
+          }
+        };
+
+        mediaRecorder.onstop = async () => {
+          clearInterval(recordInterval);
+          recordTimer.textContent = '';
+          stream.getTracks().forEach(t => t.stop());
+
+          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          setStatus(matchStatus, 'Recording finished. Uploading for match...');
+
+          await matchFile(blob);
+        };
+
+        mediaRecorder.start();
+        recordStartTime = Date.now();
+        recordBtn.textContent = '■ Stop recording';
+        recordBtn.classList.remove('secondary');
+        recordBtn.classList.add('primary');
+
+        recordInterval = setInterval(() => {
+          const seconds = Math.floor((Date.now() - recordStartTime) / 1000);
+          recordTimer.textContent = `${seconds}s`;
+        }, 200);
+
+        // Auto-stop after 10 seconds
+        setTimeout(() => {
+          if (mediaRecorder && mediaRecorder.state === 'recording') {
+            mediaRecorder.stop();
+            mediaRecorder = null;
+            recordBtn.textContent = '🎙 Start recording';
+            recordBtn.classList.add('secondary');
+          }
+        }, 10000);
+
+      } catch (e) {
+        console.error(e);
+        setStatus(matchStatus, 'Unable to access microphone.');
+      }
+    }
+
+    function stopRecording() {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        mediaRecorder.stop();
+        mediaRecorder = null;
+        recordBtn.textContent = '🎙 Start recording';
+        recordBtn.classList.add('secondary');
+      }
+    }
+
+    addBtn.addEventListener('click', () => {
+      addSong();
+    });
+
+    matchBtn.addEventListener('click', () => {
+      const file = matchFileInput.files[0];
+      matchFile(file);
+    });
+
+    recordBtn.addEventListener('click', () => {
+      if (mediaRecorder && mediaRecorder.state === 'recording') {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    });
+  </script>
+</body>
+</html>
+
+
