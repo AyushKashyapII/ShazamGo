@@ -65,7 +65,17 @@ func main() {
 	} else {
 		// Query/match song
 		result := db.Match(hashes)
-		fmt.Printf("Match result: SongID=%d, Confidence=%.2f\n", result.SongID, result.Confidence)
+		fmt.Println("\n=== Match Result ===")
+		if result.SongID != -1 {
+			fmt.Printf("✓ Match found!\n")
+			fmt.Printf("  Song ID: %d\n", result.SongID)
+			fmt.Printf("  Song Name: %s\n", result.SongName)
+			fmt.Printf("  Matches: %d/%d hashes\n", result.MatchCount, result.TotalHashes)
+			fmt.Printf("  Confidence: %.2f%%\n", result.Confidence*100)
+		} else {
+			fmt.Printf("✗ No match found\n")
+			fmt.Printf("  Confidence: %.2f%%\n", result.Confidence*100)
+		}
 	}
 }
 
@@ -103,12 +113,16 @@ func addSong(db *matcher.FingerprintDB, filePath string, hashes map[uint32]float
 
 func generateSongID(filePath string) int {
 	// Simple hash function to generate a song ID from filename
-	hash := 0
+	// Use uint64 to avoid overflow, then convert to positive int
+	var hash uint64 = 0
 	for _, char := range filePath {
-		hash = hash*31 + int(char)
+		hash = hash*31 + uint64(char)
 	}
-	if hash < 0 {
-		hash = -hash
+	// Convert to int and ensure positive (mod by max int32 to keep it reasonable)
+	// Use 2147483647 (max int32) as modulus to ensure positive result
+	result := int(hash % 2147483647)
+	if result == 0 {
+		result = 1 // Ensure non-zero
 	}
-	return hash
+	return result
 }
