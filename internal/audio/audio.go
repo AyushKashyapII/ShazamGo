@@ -27,7 +27,6 @@ func LoadWav(path string) ([]float64,int,error) {
 	sampleRate:=int(decoder.SampleRate)
 	format := buf.Format
 	numChannels := int(format.NumChannels)
-
 	// Find the maximum absolute value to determine bit depth and normalization
 	maxAbsValue := 0
 	for _, sample := range buf.Data {
@@ -39,7 +38,6 @@ func LoadWav(path string) ([]float64,int,error) {
 			maxAbsValue = abs
 		}
 	}
-
 	// Infer bit depth from maximum value and calculate normalization factor
 	// For 16-bit: max value is 32767, so divide by 32768.0
 	// For 24-bit: max value is 8388607, so divide by 8388608.0
@@ -61,13 +59,11 @@ func LoadWav(path string) ([]float64,int,error) {
 	}
 
 	fmt.Printf("audio: Format - %d channels, %d-bit (inferred), %d Hz\n", numChannels, bitDepth, sampleRate)
-
 	samples:=make([]float64,len(buf.Data))
 	for i,sample:=range buf.Data {
 		// Normalize to [-1.0, 1.0] range
 		samples[i]=float64(sample)/maxValue
 	}
-
 	// If stereo, convert to mono
 	if numChannels == 2 {
 		samples = ToMono(samples)

@@ -21,11 +21,20 @@ func NewDB() *FingerprintDB{
 	}
 }
 
-// func (f *FingerprintDB) RegisterSong(songID int,hashes map[uint32]float64){
-// 	f.mu.Lock()
-// 	defer f.mu.Unlock()
-// 	f.db[hash]=append(f.db[hash])
-// }
+func (f *FingerprintDB) RegisterSong(songID int, hashes map[uint32]float64) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	
+	for hash, timestamp := range hashes {
+		match := Match{
+			SongID:    songID,
+			Timestamp: timestamp,
+		}
+		f.db[hash] = append(f.db[hash], match)
+	}
+	
+	return nil
+}
 
 type MatchResult struct{
 	SongID int

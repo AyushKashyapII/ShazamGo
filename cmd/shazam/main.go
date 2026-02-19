@@ -1,22 +1,26 @@
 package main
 
 import (
+	"flag"
 	"fmt"
-	"os"
 	"shazam-go/internal/audio"
 	"shazam-go/internal/fingerprint"
 	"shazam-go/internal/matcher"
 )
 
 func main() {
-	fmt.Println("Shazam-Go Entry Point")
+	addFlag := flag.Bool("add", false, "Add a song to the database")
+	flag.Parse()
 
-	if len(os.Args) < 2 {
-		fmt.Println("Usage: go run cmd/shazam/main.go <path_to_wav_file>")
+	if flag.NArg() < 1 {
+		fmt.Println("Usage:")
+		fmt.Println("  Add song:    go run cmd/shazam/main.go --add <path_to_wav_file>")
+		fmt.Println("  Query song:  go run cmd/shazam/main.go <path_to_wav_file>")
+		flag.PrintDefaults()
 		return
 	}
 
-	filePath := os.Args[1]
+	filePath := flag.Arg(0)
 
 	// 1. Load WAV
 	samples, sampleRate, err := audio.LoadWav(filePath)
@@ -25,25 +29,10 @@ func main() {
 		return
 	}
 	fmt.Printf("Loaded %d samples at %d Hz\n", len(samples), sampleRate)
-	
-	// Debug: check sample range
-	if len(samples) > 0 {
-		min, max := samples[0], samples[0]
-		for _, s := range samples {
-			if s < min {
-				min = s
-			}
-			if s > max {
-				max = s
-			}
-		}
-		fmt.Printf("Sample range: [%.6f, %.6f]\n", min, max)
-	}
 
 	// Samples are already normalized and converted to mono in LoadWav
 	monoSamples := samples
-
-	// 3. Generate Spectrogram
+	// 2. Generate Spectrogram
 	spectrogram, err := fingerprint.GenerateSpectogram(monoSamples, sampleRate)
 	if err != nil {
 		fmt.Printf("Error generating spectrogram: %v\n", err)
@@ -51,7 +40,7 @@ func main() {
 	}
 	fmt.Printf("Generated spectrogram with %d segments\n", len(spectrogram))
 
-	// 4. Extract Peaks
+	// 3. Extract Peaks
 	peaks, err := fingerprint.ExtractPeaks(spectrogram, sampleRate)
 	if err != nil {
 		fmt.Printf("Error extracting peaks: %v\n", err)
@@ -59,7 +48,7 @@ func main() {
 	}
 	fmt.Printf("Extracted %d peaks\n", len(peaks))
 
-	// 5. Generate Hashes
+	// 4. Generate Hashes
 	hashes, err := fingerprint.GenerateHashes(peaks, sampleRate)
 	if err != nil {
 		fmt.Printf("Error generating hashes: %v\n", err)
@@ -67,8 +56,43 @@ func main() {
 	}
 	fmt.Printf("Generated %d hashes\n", len(hashes))
 
-	// 6. Match (Placeholder for now)
 	db := matcher.NewDB()
-	result := db.Match(hashes)
-	fmt.Printf("Match result: SongID=%d, Confidence=%.2f\n", result.SongID, result.Confidence)
+
+	if *addFlag {
+		// Add song to database
+		addSong(db, filePath, hashes)
+	} else {
+		// Query/match song
+		result := db.Match(hashes)
+		fmt.Printf("Match result: SongID=%d, Confidence=%.2f\n", result.SongID, result.Confidence)
+	}
+}
+
+func addSong(db *matcher.FingerprintDB, filePath string, hashes map[uint32]float64) {
+	fmt.Println("\n=== Adding song to database ===")
+	fmt.Printf("File: %s\n", filePath)
+	fmt.Printf("Hashes: %d\n", len(hashes))
+	
+	// Generate a song ID (for now, use a simple hash of the filename)
+	songID := generateSongID(filePath)
+	
+	err := db.RegisterSong(songID, hashes)
+	if err != nil {
+		fmt.Printf("Error registering song: %v\n", err)
+		return
+	}
+	
+	fmt.Printf("✓ Successfully added song with ID: %d\n", songID)
+}
+
+func generateSongID(filePath string) int {
+	// Simple hash function to generate a song ID from filename
+	hash := 0
+	for _, char := range filePath {
+		hash = hash*31 + int(char)
+	}
+	if hash < 0 {
+		hash = -hash
+	}
+	return hash
 }
