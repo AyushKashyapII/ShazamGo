@@ -284,7 +284,17 @@
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         recordedChunks = [];
 
-        const options = { mimeType: 'audio/webm' };
+        // Try to use the best available audio format
+        let options = {};
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          options = { mimeType: 'audio/webm;codecs=opus' };
+        } else if (MediaRecorder.isTypeSupported('audio/webm')) {
+          options = { mimeType: 'audio/webm' };
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          options = { mimeType: 'audio/mp4' };
+        } else if (MediaRecorder.isTypeSupported('audio/ogg')) {
+          options = { mimeType: 'audio/ogg' };
+        }
         mediaRecorder = new MediaRecorder(stream, options);
 
         mediaRecorder.ondataavailable = (e) => {
@@ -297,11 +307,25 @@
           clearInterval(recordInterval);
           recordTimer.textContent = '';
           stream.getTracks().forEach(t => t.stop());
+          
+          // Create blob with appropriate extension
+          const mimeType = mediaRecorder.mimeType || 'audio/webm';
+          const extension = mimeType.includes('webm') ? 'webm' : 
+                           mimeType.includes('mp4') ? 'mp4' : 
+                           mimeType.includes('ogg') ? 'ogg' : 'webm';
 
-          const blob = new Blob(recordedChunks, { type: 'audio/webm' });
+          // Create blob with appropriate MIME type
+          const mimeType = mediaRecorder.mimeType || 'audio/webm';
+          const blob = new Blob(recordedChunks, { type: mimeType });
+          
+          // Create a File object with proper extension for FFmpeg detection
+          const extension = mimeType.includes('webm') ? 'webm' : 
+                           mimeType.includes('mp4') ? 'm4a' : 
+                           mimeType.includes('ogg') ? 'ogg' : 'webm';
+          const file = new File([blob], `recording.${extension}`, { type: mimeType });
+          
           setStatus(matchStatus, 'Recording finished. Uploading for match...');
-
-          await matchFile(blob);
+          await matchFile(file);
         };
 
         mediaRecorder.start();

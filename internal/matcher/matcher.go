@@ -13,7 +13,7 @@ import (
 const (
 	hashesDBFile = "data/hashes.db"
 	songsDBFile  = "data/songs.json"
-	offsetTolerance = 0.5 // seconds - group offsets within this range
+	offsetTolerance = 0.5 
 )
 
 type Match struct{
@@ -24,7 +24,7 @@ type Match struct{
 type FingerprintDB struct{
 	db map[uint32][]Match
 	mu sync.RWMutex
-	songs map[int]string // songID -> song name
+	songs map[int]string 
 }
 
 func NewDB() *FingerprintDB{
@@ -32,7 +32,7 @@ func NewDB() *FingerprintDB{
 		db: make(map[uint32][]Match),
 		songs: make(map[int]string),
 	}
-	// Load existing data from files
+
 	if err := db.LoadFromFiles(); err != nil {
 		fmt.Printf("Warning: Could not load database files: %v (starting with empty database)\n", err)
 	}
@@ -43,10 +43,8 @@ func (f *FingerprintDB) RegisterSong(songID int, songName string, hashes map[uin
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	
-	// Store song metadata
 	f.songs[songID] = songName
 	
-	// Store hashes in memory
 	for hash, timestamp := range hashes {
 		match := Match{
 			SongID:    songID,
@@ -55,7 +53,6 @@ func (f *FingerprintDB) RegisterSong(songID int, songName string, hashes map[uin
 		f.db[hash] = append(f.db[hash], match)
 	}
 	
-	// Save to files
 	if err := f.saveSongMetadata(songID, songName); err != nil {
 		return fmt.Errorf("failed to save song metadata: %v", err)
 	}
@@ -69,23 +66,20 @@ func (f *FingerprintDB) RegisterSong(songID int, songName string, hashes map[uin
 func (f *FingerprintDB) GetSongName(songID int) string {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	// Normalize to positive ID for lookup
 	positiveID := normalizeSongID(songID)
 	return f.songs[positiveID]
 }
 
-// normalizeSongID converts negative IDs to positive by taking absolute value
 func normalizeSongID(songID int) int {
 	if songID < 0 {
 		return -songID
 	}
 	if songID == 0 {
-		return 1 // Ensure non-zero
+		return 1 
 	}
 	return songID
 }
 
-// GetStats returns database statistics for debugging
 func (f *FingerprintDB) GetStats() (totalHashes int, totalMatches int) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
