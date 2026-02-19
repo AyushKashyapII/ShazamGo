@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"path/filepath"
 	"shazam-go/internal/audio"
 	"shazam-go/internal/fingerprint"
 	"shazam-go/internal/matcher"
@@ -68,6 +69,11 @@ func main() {
 	}
 }
 
+type SongInfo struct{
+	SongID int
+	Title string
+}
+
 func addSong(db *matcher.FingerprintDB, filePath string, hashes map[uint32]float64) {
 	fmt.Println("\n=== Adding song to database ===")
 	fmt.Printf("File: %s\n", filePath)
@@ -76,14 +82,24 @@ func addSong(db *matcher.FingerprintDB, filePath string, hashes map[uint32]float
 	// Generate a song ID (for now, use a simple hash of the filename)
 	songID := generateSongID(filePath)
 	
-	err := db.RegisterSong(songID, hashes)
+	// Extract just the filename for storage
+	songName := filepath.Base(filePath)
+	
+	err := db.RegisterSong(songID, songName, hashes)
 	if err != nil {
 		fmt.Printf("Error registering song: %v\n", err)
 		return
 	}
 	
+	// Show database stats
+	totalHashes, totalMatches := db.GetStats()
 	fmt.Printf("✓ Successfully added song with ID: %d\n", songID)
+	fmt.Printf("✓ Song name: %s\n", songName)
+	fmt.Printf("Database stats: %d unique hashes, %d total matches\n", totalHashes, totalMatches)
+	fmt.Printf("✓ Data saved to disk (data/hashes.db and data/songs.json)\n")
 }
+
+
 
 func generateSongID(filePath string) int {
 	// Simple hash function to generate a song ID from filename

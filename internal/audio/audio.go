@@ -26,16 +26,15 @@ func LoadWav(path string) ([]float64,int,error) {
 
 	sampleRate:=int(decoder.SampleRate)
 	format := buf.Format
-	numChannels := int(format.NumChannels)
-	// Find the maximum absolute value to determine bit depth and normalization
-	maxAbsValue := 0
-	for _, sample := range buf.Data {
-		abs := sample
-		if abs < 0 {
-			abs = -abs
+	numChannels:=int(format.NumChannels)
+	maxAbsValue:=0
+	for _, sample:=range buf.Data {
+		abs:=sample
+		if abs<0 {
+			abs=-abs
 		}
-		if abs > maxAbsValue {
-			maxAbsValue = abs
+		if abs>maxAbsValue {
+			maxAbsValue=abs
 		}
 	}
 	// Infer bit depth from maximum value and calculate normalization factor
